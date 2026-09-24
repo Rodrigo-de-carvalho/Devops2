@@ -38,33 +38,3 @@ variable "db_username" {
   type        = string
   default     = "dashboard_app"
 }
-
-variable "kafka_plan" {
-  description = "Plano do serviço Kafka (normalmente pago — verifique disponibilidade na conta)"
-  type        = string
-  default     = "startup-2"
-}
-
-variable "kafka_service_name" {
-  description = "Nome do serviço Kafka"
-  type        = string
-  default     = "bcb-kafka"
-}
-
-variable "kafka_topic_name" {
-  description = "Nome do tópico usado para os eventos de indicadores do BCB"
-  type        = string
-  default     = "bcb-indicadores"
-}
-
-variable "grafana_plan" {
-  description = "Plano do serviço Grafana"
-  type        = string
-  default     = "startup-1"
-}
-
-variable "grafana_service_name" {
-  description = "Nome do serviço Grafana"
-  type        = string
-  default     = "bcb-grafana"
-}
