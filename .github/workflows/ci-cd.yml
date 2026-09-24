@@ -93,6 +93,16 @@ jobs:
           curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
 
       - name: Health check pós-deploy
+        # O Render leva alguns minutos para buildar e trocar a versão (e o
+        # plano free tem cold start), então tenta por até ~5 min em vez de
+        # uma espera fixa.
         run: |
-          sleep 45
-          curl -fsS "${{ secrets.APP_HEALTHCHECK_URL }}/healthz"
+          sleep 30
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 30 "${{ secrets.APP_HEALTHCHECK_URL }}/healthz"; then
+              echo; echo "App no ar (tentativa $i)"; exit 0
+            fi
+            echo "Tentativa $i falhou, aguardando 15s..."
+            sleep 15
+          done
+          echo "App não respondeu /healthz a tempo"; exit 1
