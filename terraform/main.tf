@@ -31,10 +31,3 @@ resource "aiven_pg_user" "app_user" {
   service_name = aiven_pg.dashboard_db.service_name
   username     = var.db_username
 }
-
-resource "aiven_grafana" "dashboards" {
-  project      = var.aiven_project
-  cloud_name   = var.cloud_name
-  plan         = var.grafana_plan
-  service_name = var.grafana_service_name
-}
