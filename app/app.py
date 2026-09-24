@@ -18,6 +18,7 @@ Variáveis de ambiente esperadas (ver .env.example):
 import os
 import time
 import datetime
+import threading
 from flask import Flask, render_template, jsonify
 import requests
 
@@ -26,7 +27,13 @@ import bcb_client as bcb
 app = Flask(__name__)
 
 CACHE_HOURS = int(os.environ.get("CACHE_HOURS", 6))
+# Intervalo mínimo entre duas tentativas de atualizar o cache — evita que
+# cada visita dispare de novo a busca na API do BCB quando ela está falhando.
+REFRESH_RETRY_SECONDS = int(os.environ.get("REFRESH_RETRY_SECONDS", 600))
 START_TIME = time.time()
+
+_refresh_lock = threading.Lock()
+_last_refresh_attempt = 0.0
 
 # Garante que as tabelas existam assim que o módulo é carregado — necessário
 # porque em produção o app roda via gunicorn (`gunicorn app:app`), que nunca
@@ -67,6 +74,29 @@ def refresh_stale_series():
                 app.logger.warning("Falha ao atualizar série %s: %s", code, exc)
 
 
+def refresh_in_background():
+    """Dispara refresh_stale_series em uma thread separada, sem bloquear a
+    requisição. A busca no IF.data percorre dezenas de trimestres e pode
+    passar do timeout do gunicorn (60s) — se rodasse dentro da requisição,
+    a página ficaria carregando até o worker ser morto."""
+    global _last_refresh_attempt
+    if time.time() - _last_refresh_attempt < REFRESH_RETRY_SECONDS:
+        return
+    if not _refresh_lock.acquire(blocking=False):
+        return  # já tem uma atualização em andamento
+    _last_refresh_attempt = time.time()
+
+    def run():
+        try:
+            refresh_stale_series()
+        except Exception:  # noqa: BLE001
+            app.logger.exception("Falha ao atualizar o cache em segundo plano")
+        finally:
+            _refresh_lock.release()
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def get_series_data(series_code: int):
     with bcb.get_connection() as conn:
         with conn.cursor() as cur:
@@ -84,7 +114,7 @@ def get_series_data(series_code: int):
 
 
 def get_dashboard_data():
-    refresh_stale_series()
+    refresh_in_background()
 
     indicators = []
     for code, meta in bcb.SERIES.items():
